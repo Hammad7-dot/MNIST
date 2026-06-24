@@ -1,7 +1,9 @@
+streamlit
 fastapi
 uvicorn
 tensorflow
 numpy
 pillow
-python-multipart
 h5py
+python-multipart
+requests
