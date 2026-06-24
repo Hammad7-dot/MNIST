@@ -4,6 +4,6 @@ uvicorn
 tensorflow
 numpy
 pillow
-h5py
 python-multipart
 requests
+pandas

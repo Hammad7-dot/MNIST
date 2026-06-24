@@ -11,7 +11,7 @@ st.title("🔢 Deep Learning MNIST Digit Recognizer")
 
 @st.cache_resource
 def load_model():
-    model_path = "mnist_model.h5"
+    model_path = "mnist_model.keras"
 
     try:
         return tf.keras.models.load_model(model_path, compile=False)

@@ -8,7 +8,7 @@ import tensorflow as tf
 
 app = FastAPI(title="MNIST Digit Classification API", version="1.0")
 
-MODEL_PATH = "mnist_model.h5"
+MODEL_PATH = "mnist_model.keras"
 
 
 def load_model_safely():
