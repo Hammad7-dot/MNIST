@@ -1,59 +1,79 @@
 import io
-import os
-import requests
+import numpy as np
+from PIL import Image, ImageOps
 import streamlit as st
-from PIL import Image
-
-# Network coordinates targeting internal container communications
-BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000/predict")
+import tensorflow as tf
 
 st.set_page_config(page_title="MNIST Digit Recognizer", layout="centered")
 st.title("🔢 Deep Learning MNIST Digit Recognizer")
-st.write("Upload an image of a handwritten digit (0-9).")
+
+
+# Cache the model so it only loads once into memory on startup
+@st.cache_resource
+def load_model():
+    return tf.keras.models.load_model("mnist_model.h5")
+
+
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Error loading 'mnist_model.h5'. Verify it is in the root folder: {e}")
+
+
+def preprocess_image(img) -> np.ndarray:
+    """Preprocess image to match the input layout of the trained ANN."""
+    # Handle alpha channels (transparency) by pasting onto a solid white canvas
+    if img.mode in ("RGBA", "LA") or (
+        img.mode == "P" and "transparency" in img.info
+    ):
+        clean_bg = Image.new("RGBA", img.size, (255, 255, 255))
+        clean_bg.paste(img, (0, 0), img.convert("RGBA"))
+        img = clean_bg
+
+    # Convert to 8-bit Grayscale and downsample to 28x28 pixels
+    img = img.convert("L").resize((28, 28), Image.Resampling.LANCZOS)
+    img_array = np.array(img)
+
+    # Invert the background if it is white/light (MNIST expects white on black)
+    corners = [
+        img_array[0, 0],
+        img_array[0, 27],
+        img_array[27, 0],
+        img_array[27, 27],
+    ]
+    if np.mean(corners) > 127:
+        img_array = 255 - img_array
+
+    # Normalize pixel array to [0.0, 1.0] and flatten to a 1D vector (1, 784)
+    final_tensor = img_array.astype("float32") / 255.0
+    return final_tensor.reshape(1, 784)
+
 
 uploaded_file = st.file_uploader(
-    "Choose a digit image file...", type=["png", "jpg", "jpeg"]
+    "Upload a handwritten digit image...", type=["png", "jpg", "jpeg"]
 )
 
 if uploaded_file is not None:
-    # Display the uploaded visual context directly to the browser view pane
     image = Image.open(uploaded_file)
-    st.image(
-        image, caption="Uploaded File Context", width=180, use_column_width=False
-    )
+    st.image(image, caption="Uploaded Image", width=180)
 
     if st.button("Analyze Pattern", type="primary"):
-        with st.spinner("Processing through Neural Network..."):
-            try:
-                # Convert active file reference context into payload byte buffer
-                buffer = io.BytesIO()
-                image.save(buffer, format="PNG")
-                buffer.seek(0)
+        with st.spinner("Analyzing..."):
+            processed_data = preprocess_image(image)
 
-                # Route post transaction payloads up stream towards API endpoints
-                files = {"file": ("image.png", buffer, "image/png")}
-                response = requests.post(BACKEND_URL, files=files)
+            # Generate prediction metrics from neural network
+            predictions = model.predict(processed_data)
+            predicted_class = int(np.argmax(predictions[0]))
+            confidence = float(predictions[0][predicted_class])
 
-                if response.status_code == 200:
-                    result = response.json()
+            # Markdown header formatting applied correctly
+            st.success(f"### Predicted Value: {predicted_class}")
+            st.metric(
+                label="Classification Confidence", value=f"{confidence:.2%}"
+            )
 
-                    if result.get("success"):
-                        # Render analytics data summaries cleanly
-                        st.success(f"### Predicted Value: {result['prediction']}")
-                        st.metric(
-                            label="Classification Confidence Level",
-                            value=f"{result['confidence']:.2%}",
-                        )
-
-                        # Render complete analytical softmax score breakdowns
-                        with st.expander("Show Probability Distribution"):
-                            st.bar_chart(result["probabilities"])
-                    else:
-                        st.error(f"Processing Failure: {result.get('error')}")
-                else:
-                    st.error(
-                        f"API Endpoint Unreachable (Status: {response.status_code})"
-                    )
-
-            except Exception as e:
-                st.error(f"System Connection Error: {str(e)}")
+            # Chart breakdown distribution
+            chart_data = {
+                str(i): float(prob) for i, prob in enumerate(predictions[0])
+            }
+            st.bar_chart(chart_data)
