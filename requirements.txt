@@ -1,8 +1,4 @@
-fastapi
-uvicorn
-streamlit
-tensorflow
-numpy
+streamlit>=1.35.0
+tensorflow>=2.16.1
 pillow
-python-multipart
-requests
+numpy
