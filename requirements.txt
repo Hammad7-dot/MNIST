@@ -1,5 +1,7 @@
-streamlit>=1.35.0
-tensorflow>=2.16.1
-pillow
+fastapi
+uvicorn
+tensorflow
 numpy
+pillow
+python-multipart
 h5py
