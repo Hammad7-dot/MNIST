@@ -11,4 +11,4 @@ COPY . .
 EXPOSE 7860
 EXPOSE 8000
 
-CMD sh -c "uvicorn api:api.py --host 0.0.0.0 --port 8000 & streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 7860"
+CMD sh -c "uvicorn app:app.py --host 0.0.0.0 --port 8000 & streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 7860"

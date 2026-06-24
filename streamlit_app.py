@@ -71,7 +71,7 @@ if uploaded_file is not None:
         img_array = 255 - img_array
 
     img_array = img_array.astype("float32") / 255.0
-    img_array = img_array.reshape(1, 28, 28, 1)
+    img_array = img_array.reshape(1, 784)
 
     prediction = model.predict(img_array, verbose=0)
 
