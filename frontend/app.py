@@ -11,7 +11,8 @@ st.title("🔢 Deep Learning MNIST Digit Recognizer")
 # Cache the model so it only loads once into memory on startup
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model("mnist_model.h5")
+    # FIXED: Added compile=False to bypass incompatible metadata during loading
+    return tf.keras.models.load_model("mnist_model.h5", compile=False)
 
 
 try:
