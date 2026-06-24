@@ -1,78 +1,59 @@
 import io
-import numpy as np
-from fastapi import FastAPI, File, UploadFile
-from PIL import Image, ImageOps
-import tensorflow as tf
+import os
+import requests
+import streamlit as st
+from PIL import Image
 
-# 1. THIS VARIABLE MUST BE NAMED EXACTLY "app"
-app = FastAPI(title="MNIST Digit Classification API", version="1.0")
+# Network coordinates targeting internal container communications
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000/predict")
 
-# 2. Load your deep learning model configuration globally on startup
-MODEL_PATH = "mnist_model.h5"
-model = tf.keras.models.load_model(MODEL_PATH)
+st.set_page_config(page_title="MNIST Digit Recognizer", layout="centered")
+st.title("🔢 Deep Learning MNIST Digit Recognizer")
+st.write("Upload an image of a handwritten digit (0-9).")
 
+uploaded_file = st.file_uploader(
+    "Choose a digit image file...", type=["png", "jpg", "jpeg"]
+)
 
-def preprocess_image(raw_bytes: bytes) -> np.ndarray:
-    """Preprocess uploaded image bytes to guarantee 100% accurate structural
+if uploaded_file is not None:
+    # Display the uploaded visual context directly to the browser view pane
+    image = Image.open(uploaded_file)
+    st.image(
+        image, caption="Uploaded File Context", width=180, use_column_width=False
+    )
 
-    matching with the MNIST-ANN input layer.
-    """
-    img = Image.open(io.BytesIO(raw_bytes))
+    if st.button("Analyze Pattern", type="primary"):
+        with st.spinner("Processing through Neural Network..."):
+            try:
+                # Convert active file reference context into payload byte buffer
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG")
+                buffer.seek(0)
 
-    # Eliminate Alpha/Transparency channels
-    if img.mode in ("RGBA", "LA") or (
-        img.mode == "P" and "transparency" in img.info
-    ):
-        white_bg = Image.new("RGBA", img.size, (255, 255, 255))
-        white_bg.paste(img, (0, 0), img.convert("RGBA"))
-        img = white_bg
+                # Route post transaction payloads up stream towards API endpoints
+                files = {"file": ("image.png", buffer, "image/png")}
+                response = requests.post(BACKEND_URL, files=files)
 
-    # Convert to standard 8-bit Grayscale and resize
-    img = img.convert("L")
-    img = img.resize((28, 28), Image.Resampling.LANCZOS)
+                if response.status_code == 200:
+                    result = response.json()
 
-    # Invert background if it is white/light
-    img_array = np.array(img)
-    corners = [
-        img_array[0, 0],
-        img_array[0, 27],
-        img_array[27, 0],
-        img_array[27, 27],
-    ]
-    if np.mean(corners) > 127:
-        img = ImageOps.invert(img)
-        img_array = np.array(img)
+                    if result.get("success"):
+                        # Render analytics data summaries cleanly
+                        st.success(f"### Predicted Value: {result['prediction']}")
+                        st.metric(
+                            label="Classification Confidence Level",
+                            value=f"{result['confidence']:.2%}",
+                        )
 
-    # Normalize and flatten to 1D vector (1, 784)
-    final_array = img_array.astype("float32") / 255.0
-    final_array = final_array.reshape(1, 784)
+                        # Render complete analytical softmax score breakdowns
+                        with st.expander("Show Probability Distribution"):
+                            st.bar_chart(result["probabilities"])
+                    else:
+                        st.error(f"Processing Failure: {result.get('error')}")
+                else:
+                    st.error(
+                        f"API Endpoint Unreachable (Status: {response.status_code})"
+                    )
 
-    return final_array
-
-
-# 3. ENDPOINTS MUST USE THE @app DECORATOR
-@app.get("/")
-def health_check():
-    return {"status": "healthy", "model": "MNIST-ANN"}
-
-
-@app.post("/predict")
-async def predict_digit(file: UploadFile = File(...)):
-    try:
-        contents = await file.read()
-        processed_tensor = preprocess_image(contents)
-
-        predictions = model.predict(processed_tensor)
-        predicted_class = int(np.argmax(predictions[0]))
-        confidence = float(predictions[0][predicted_class])
-
-        return {
-            "success": True,
-            "prediction": predicted_class,
-            "confidence": round(confidence, 4),
-            "probabilities": {
-                str(i): round(float(prob), 4) for i, prob in enumerate(predictions[0])
-            },
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+            except Exception as e:
+                st.error(f"System Connection Error: {str(e)}")
