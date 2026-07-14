@@ -1,9 +1,6 @@
 streamlit
-fastapi
-uvicorn
-tensorflow==2.20.0
+streamlit-drawable-canvas
+tensorflow-cpu
 numpy
 pillow
-python-multipart
-requests
-pandas
+scipy
