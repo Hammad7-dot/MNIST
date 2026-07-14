@@ -1,5 +1,3 @@
-import json
-import h5py
 import numpy as np
 from PIL import Image
 import streamlit as st
@@ -11,36 +9,10 @@ st.title("🔢 Deep Learning MNIST Digit Recognizer")
 
 @st.cache_resource
 def load_model():
-    model_path = "mnist_model.keras"
-
-    try:
-        return tf.keras.models.load_model(model_path, compile=False)
-
-    except Exception:
-        # Remove problematic quantization_config entries
-        def remove_quantization(obj):
-            if isinstance(obj, dict):
-                obj.pop("quantization_config", None)
-                for value in obj.values():
-                    remove_quantization(value)
-            elif isinstance(obj, list):
-                for item in obj:
-                    remove_quantization(item)
-
-        with h5py.File(model_path, "r+") as f:
-            if "model_config" in f.attrs:
-                config = f.attrs["model_config"]
-
-                if isinstance(config, bytes):
-                    config = config.decode("utf-8")
-
-                config_json = json.loads(config)
-
-                remove_quantization(config_json)
-
-                f.attrs["model_config"] = json.dumps(config_json)
-
-        return tf.keras.models.load_model(model_path, compile=False)
+    return tf.keras.models.load_model(
+        "mnist_model.keras",
+        compile=False
+    )
 
 
 try:
@@ -66,7 +38,6 @@ if uploaded_file is not None:
 
     img_array = np.array(image)
 
-    # Invert if background is white
     if np.mean(img_array) > 127:
         img_array = 255 - img_array
 

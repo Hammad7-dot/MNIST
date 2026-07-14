@@ -1,54 +1,33 @@
 import io
-import json
-import h5py
 import numpy as np
 from fastapi import FastAPI, File, UploadFile
 from PIL import Image, ImageOps
 import tensorflow as tf
 
-app = FastAPI(title="MNIST Digit Classification API", version="1.0")
+app = FastAPI(
+    title="MNIST Digit Classification API",
+    version="1.0"
+)
 
 MODEL_PATH = "mnist_model.keras"
 
 
-def load_model_safely():
-    try:
-        return tf.keras.models.load_model(MODEL_PATH, compile=False)
-
-    except Exception:
-
-        def remove_quantization(obj):
-            if isinstance(obj, dict):
-                obj.pop("quantization_config", None)
-                for value in obj.values():
-                    remove_quantization(value)
-
-            elif isinstance(obj, list):
-                for item in obj:
-                    remove_quantization(item)
-
-        with h5py.File(MODEL_PATH, "r+") as f:
-            if "model_config" in f.attrs:
-                config = f.attrs["model_config"]
-
-                if isinstance(config, bytes):
-                    config = config.decode("utf-8")
-
-                config_json = json.loads(config)
-
-                remove_quantization(config_json)
-
-                f.attrs["model_config"] = json.dumps(config_json)
-
-        return tf.keras.models.load_model(MODEL_PATH, compile=False)
-
-
-model = load_model_safely()
+# Load model once when the API starts
+try:
+    model = tf.keras.models.load_model(
+        MODEL_PATH,
+        compile=False
+    )
+except Exception as e:
+    raise RuntimeError(
+        f"Failed to load model '{MODEL_PATH}': {e}"
+    )
 
 
 def preprocess_image(raw_bytes):
     img = Image.open(io.BytesIO(raw_bytes))
 
+    # Handle transparent images
     if img.mode in ("RGBA", "LA") or (
         img.mode == "P" and "transparency" in img.info
     ):
@@ -61,6 +40,7 @@ def preprocess_image(raw_bytes):
 
     img_array = np.array(img)
 
+    # Detect white background and invert
     corners = [
         img_array[0, 0],
         img_array[0, 27],
@@ -74,7 +54,7 @@ def preprocess_image(raw_bytes):
 
     img_array = img_array.astype("float32") / 255.0
 
-    # ANN input
+    # ANN model expects 784 inputs
     img_array = img_array.reshape(1, 784)
 
     return img_array
@@ -84,22 +64,32 @@ def preprocess_image(raw_bytes):
 def health_check():
     return {
         "status": "healthy",
-        "tensorflow": tf.__version__
+        "tensorflow_version": tf.__version__
     }
 
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    contents = await file.read()
+    try:
+        contents = await file.read()
 
-    x = preprocess_image(contents)
+        x = preprocess_image(contents)
 
-    prediction = model.predict(x, verbose=0)
+        prediction = model.predict(
+            x,
+            verbose=0
+        )
 
-    digit = int(np.argmax(prediction))
-    confidence = float(np.max(prediction))
+        digit = int(np.argmax(prediction))
+        confidence = float(np.max(prediction))
 
-    return {
-        "prediction": digit,
-        "confidence": round(confidence * 100, 2)
-    }
+        return {
+            "prediction": digit,
+            "confidence": round(confidence * 100, 2)
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e)
+        }
+
